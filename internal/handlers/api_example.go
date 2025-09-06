@@ -166,7 +166,7 @@ type APIHandlers struct {
 func (h *APIHandlers) writeJSONResponse(w http.ResponseWriter, data interface{}, statusCode int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	
+
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		h.Logger.WithError(err).Error("Failed to encode JSON response")
 	}
@@ -175,12 +175,12 @@ func (h *APIHandlers) writeJSONResponse(w http.ResponseWriter, data interface{},
 func (h *APIHandlers) writeErrorResponse(w http.ResponseWriter, message string, statusCode int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	
+
 	errorResponse := map[string]interface{}{
 		"error":   http.StatusText(statusCode),
 		"message": message,
 	}
-	
+
 	if err := json.NewEncoder(w).Encode(errorResponse); err != nil {
 		h.Logger.WithError(err).Error("Failed to encode error response")
 	}
@@ -190,13 +190,13 @@ func (h *APIHandlers) writeErrorResponse(w http.ResponseWriter, message string, 
 func (h *APIHandlers) ValidateUserID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		userID := chi.URLParam(r, "userId")
-		
+
 		// Валидация UUID формата
 		// if !isValidUUID(userID) {
 		//     h.writeErrorResponse(w, "Invalid user ID format", http.StatusBadRequest)
 		//     return
 		// }
-		
+
 		next.ServeHTTP(w, r)
 	})
 }
