@@ -45,21 +45,25 @@
 ## Быстрый старт
 
 1. Скопируйте файл конфигурации:
+
    ```bash
    cp env.example .env
    ```
 
 2. Установите зависимости:
+
    ```bash
    go mod download
    ```
 
 3. Запустите сервис:
+
    ```bash
    go run cmd/main.go
    ```
 
 4. Проверьте работу:
+
    ```bash
    curl http://localhost:8080/health
    curl http://localhost:8080/api/v1/ping
@@ -83,11 +87,13 @@
 ## Docker
 
 Сборка образа:
+
 ```bash
 docker build -t service-skeleton .
 ```
 
 Запуск контейнера:
+
 ```bash
 docker run -p 8080:8080 --env-file .env service-skeleton
 ```
@@ -97,26 +103,31 @@ docker run -p 8080:8080 --env-file .env service-skeleton
 Скелетон использует модульную архитектуру с переиспользуемыми пакетами в `internal/pkg/`:
 
 ### Logger (`internal/pkg/logger`)
+
 - Настройка Logrus с JSON/текстовым форматом
 - Поддержка уровней логирования
 - Контекстное логирование для сервисов
 
 ### Tracing (`internal/pkg/tracing`)  
+
 - Настройка OpenTelemetry + Jaeger
 - Конфигурируемая частота семплирования
 - Автоматическая регистрация глобального tracer
 
 ### Metrics (`internal/pkg/metrics`)
+
 - Prometheus метрики с кастомным registry
 - HTTP middleware для автоматических метрик
 - Методы для создания кастомных метрик
 
 ### Server (`internal/pkg/server`)
+
 - Chi router с настраиваемыми middleware
 - Методы для регистрации маршрутов
 - Graceful shutdown
 
 ### Преимущества модульной архитектуры:
+
 - **Переиспользование**: пакеты можно использовать в других сервисах
 - **Тестируемость**: каждый пакет можно тестировать независимо  
 - **Конфигурируемость**: гибкая настройка каждого компонента

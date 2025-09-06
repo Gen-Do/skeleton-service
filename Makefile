@@ -24,19 +24,18 @@ generate: ## Генерировать код из OpenAPI спецификаци
 
 generate-openapi: ## Генерировать код из OpenAPI спецификации
 	@echo "📋 Генерация из OpenAPI спецификации..."
-	@mkdir -p internal/generated/api internal/api
+	@mkdir -p internal/generated/api internal/generated/client internal/api
 	
 	# Генерация моделей (entities) в internal/generated/api/
 	@oapi-codegen -generate types -package api -o internal/generated/api/types.go api/openapi.yaml
 	
-	# Генерация интерфейса сервера в internal/generated/api/
-	@oapi-codegen -generate server -package api -o internal/generated/api/server.go api/openapi.yaml
+	# Генерация интерфейса сервера (Echo) не нужна, используем Chi handlers
 	
-	# Генерация Chi handlers в internal/api/
-	@oapi-codegen -generate chi-server -package handlers -o internal/api/handlers.go api/openapi.yaml
+	# Генерация Chi handlers в internal/generated/api/
+	@oapi-codegen -generate chi-server -package api -o internal/generated/api/handlers.go api/openapi.yaml
 	
-	# Генерация клиента (опционально)
-	@oapi-codegen -generate client -package client -o internal/generated/api/client.go api/openapi.yaml
+	# Генерация клиента и типов клиента в отдельную директорию
+	@oapi-codegen -generate types,client -package client -o internal/generated/client/client.go api/openapi.yaml
 	
 	@echo "✅ Генерация из OpenAPI завершена"
 
@@ -94,7 +93,7 @@ clean: ## Очистить сгенерированные файлы и арте
 	@rm -rf bin/
 	@rm -f coverage.out coverage.html
 	@rm -rf internal/generated/api/*
-	@rm -f internal/api/handlers.go
+	@rm -rf internal/generated/client/*
 	@go clean -cache
 	@echo "✅ Очистка завершена"
 
@@ -102,7 +101,7 @@ clean-skeleton: ## Очистить скелетон от временных API
 	@echo "🧹 Очистка скелетона от временных файлов..."
 	@rm -rf api/openapi.yaml
 	@rm -rf internal/generated/api/*
-	@rm -f internal/api/handlers.go
+	@rm -rf internal/generated/client/*
 	@echo "✅ Скелетон очищен"
 
 lint: ## Запустить линтер

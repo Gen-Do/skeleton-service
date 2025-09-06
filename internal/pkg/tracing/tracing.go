@@ -27,7 +27,7 @@ func DefaultConfig() *Config {
 		ServiceName:    getEnv("SERVICE_NAME", "service-skeleton"),
 		ServiceVersion: getEnv("SERVICE_VERSION", "1.0.0"),
 		JaegerEndpoint: getEnv("JAEGER_ENDPOINT", "http://localhost:14268/api/traces"),
-		Enabled:        getEnvBool("TRACING_ENABLED", true),
+		Enabled:        getEnvBool("TRACING_ENABLED", false),
 		SamplingRate:   getEnvFloat("TRACING_SAMPLING_RATE", 1.0),
 	}
 }
@@ -58,17 +58,11 @@ func Setup(config *Config) (*TracerProvider, error) {
 	}
 
 	// Создание ресурса с информацией о сервисе
-	res, err := resource.Merge(
-		resource.Default(),
-		resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceName(config.ServiceName),
-			semconv.ServiceVersion(config.ServiceVersion),
-		),
+	res := resource.NewWithAttributes(
+		semconv.SchemaURL,
+		semconv.ServiceName(config.ServiceName),
+		semconv.ServiceVersion(config.ServiceVersion),
 	)
-	if err != nil {
-		return nil, err
-	}
 
 	// Создание tracer provider с настройками
 	tp := trace.NewTracerProvider(
