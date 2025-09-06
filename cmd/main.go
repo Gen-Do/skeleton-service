@@ -12,14 +12,14 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 
-	"github.com/gendo/service-skeleton/internal/config"
-	"github.com/gendo/service-skeleton/internal/pkg/logger"
-	"github.com/gendo/service-skeleton/internal/pkg/metrics"
-	"github.com/gendo/service-skeleton/internal/pkg/server"
-	"github.com/gendo/service-skeleton/internal/pkg/tracing"
+	"github.com/Gen-Do/skeleton-service/internal/config"
+	"github.com/Gen-Do/skeleton-service/internal/pkg/logger"
+	"github.com/Gen-Do/skeleton-service/internal/pkg/metrics"
+	"github.com/Gen-Do/skeleton-service/internal/pkg/server"
+	"github.com/Gen-Do/skeleton-service/internal/pkg/tracing"
 	// Импорты для работы с сгенерированными API
-	// "github.com/gendo/service-skeleton/internal/generated/api"
-	// "github.com/gendo/service-skeleton/internal/handlers"
+	// "github.com/Gen-Do/skeleton-service/internal/generated/api"
+	// "github.com/Gen-Do/skeleton-service/internal/handlers"
 	// "github.com/getkin/kin-openapi/openapi3filter"
 	// oapimiddleware "github.com/deepmap/oapi-codegen/v2/pkg/chi-middleware"
 )
