@@ -1,9 +1,9 @@
 package logger
 
 import (
-	"os"
 	"time"
 
+	"github.com/Gen-Do/skeleton-service/internal/pkg/env"
 	"github.com/sirupsen/logrus"
 )
 
@@ -16,8 +16,8 @@ type Config struct {
 // DefaultConfig возвращает конфигурацию логгера по умолчанию
 func DefaultConfig() *Config {
 	return &Config{
-		Level:  getEnv("LOG_LEVEL", "info"),
-		Format: getEnv("LOG_FORMAT", "json"),
+		Level:  env.GetString("LOG_LEVEL", "info"),
+		Format: env.GetString("LOG_FORMAT", "json"),
 	}
 }
 
@@ -64,12 +64,4 @@ func WithServiceContext(logger *logrus.Logger, serviceName, version string) *log
 		"service": serviceName,
 		"version": version,
 	})
-}
-
-// getEnv получает переменную окружения с значением по умолчанию
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
 }

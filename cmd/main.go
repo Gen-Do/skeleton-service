@@ -52,7 +52,7 @@ func main() {
 	tracerProvider, err := tracing.Setup(&tracing.Config{
 		ServiceName:    cfg.Server.ServiceName,
 		ServiceVersion: "1.0.0",
-		JaegerEndpoint: cfg.Tracing.JaegerEndpoint,
+		OTLPEndpoint:   cfg.Tracing.JaegerEndpoint,
 		Enabled:        cfg.Tracing.Enabled,
 		SamplingRate:   1.0,
 	})

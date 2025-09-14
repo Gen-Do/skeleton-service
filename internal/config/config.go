@@ -1,8 +1,7 @@
 package config
 
 import (
-	"os"
-	"strconv"
+	"github.com/Gen-Do/skeleton-service/internal/pkg/env"
 )
 
 // Config holds all configuration for the service
@@ -40,37 +39,19 @@ type TracingConfig struct {
 func Load() *Config {
 	return &Config{
 		Server: ServerConfig{
-			Port:        getEnv("PORT", "8080"),
-			ServiceName: getEnv("SERVICE_NAME", "service-skeleton"),
-			Environment: getEnv("ENVIRONMENT", "development"),
+			Port:        env.GetString("PORT", "8080"),
+			ServiceName: env.GetString("SERVICE_NAME", "service-skeleton"),
+			Environment: env.GetString("ENVIRONMENT", "development"),
 		},
 		Database: DatabaseConfig{
-			URL: getEnv("DATABASE_URL", ""),
+			URL: env.GetString("DATABASE_URL", ""),
 		},
 		Logging: LoggingConfig{
-			Level: getEnv("LOG_LEVEL", "info"),
+			Level: env.GetString("LOG_LEVEL", "info"),
 		},
 		Tracing: TracingConfig{
-			JaegerEndpoint: getEnv("JAEGER_ENDPOINT", "http://localhost:14268/api/traces"),
-			Enabled:        getEnvBool("TRACING_ENABLED", true),
+			JaegerEndpoint: env.GetString("JAEGER_ENDPOINT", "http://localhost:14268/api/traces"),
+			Enabled:        env.GetBool("TRACING_ENABLED", true),
 		},
 	}
-}
-
-// getEnv gets environment variable with default value
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-// getEnvBool gets boolean environment variable with default value
-func getEnvBool(key string, defaultValue bool) bool {
-	if value := os.Getenv(key); value != "" {
-		if parsed, err := strconv.ParseBool(value); err == nil {
-			return parsed
-		}
-	}
-	return defaultValue
 }
