@@ -20,12 +20,12 @@ type Config struct {
 	SamplingRate   float64
 }
 
-// DefaultConfig возвращает конфигурацию трассировки по умолчанию
-func DefaultConfig() *Config {
+// defaultConfig возвращает конфигурацию трассировки по умолчанию
+func defaultConfig() *Config {
 	return &Config{
 		ServiceName:    env.GetString("SERVICE_NAME", "service-skeleton"),
-		ServiceVersion: env.GetString("SERVICE_VERSION", "1.0.0"),
-		OTLPEndpoint:   env.GetString("OTLP_ENDPOINT", "http://localhost:4318/v1/traces"),
+		ServiceVersion: env.GetString("SERVICE_VERSION", "0"),
+		OTLPEndpoint:   env.GetString("TRACING_ENDPOINT", "http://localhost:4318/v1/traces"),
 		Enabled:        env.GetBool("TRACING_ENABLED", false),
 		SamplingRate:   env.GetFloat64("TRACING_SAMPLING_RATE", 1.0),
 	}
@@ -37,8 +37,9 @@ type TracerProvider struct {
 	config *Config
 }
 
-// Setup настраивает и возвращает TracerProvider
-func Setup(config *Config) (*TracerProvider, error) {
+// New настраивает и возвращает TracerProvider
+func New() (*TracerProvider, error) {
+	config := defaultConfig()
 	if !config.Enabled {
 		// Возвращаем no-op tracer provider
 		tp := trace.NewTracerProvider()
@@ -78,11 +79,6 @@ func Setup(config *Config) (*TracerProvider, error) {
 		TracerProvider: tp,
 		config:         config,
 	}, nil
-}
-
-// SetupDefault настраивает трассировку с конфигурацией по умолчанию
-func SetupDefault() (*TracerProvider, error) {
-	return Setup(DefaultConfig())
 }
 
 // Shutdown корректно завершает работу tracer provider

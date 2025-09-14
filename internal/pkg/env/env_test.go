@@ -237,3 +237,10 @@ func TestIsSet(t *testing.T) {
 		}
 	})
 }
+
+func TestLoadEnvFiles(t *testing.T) {
+	t.Run("loads env files without error when files don't exist", func(t *testing.T) {
+		// Функция не должна паниковать или возвращать ошибку
+		LoadEnvFiles()
+	})
+}

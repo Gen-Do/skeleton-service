@@ -3,6 +3,8 @@ package env
 import (
 	"os"
 	"strconv"
+
+	"github.com/joho/godotenv"
 )
 
 // GetString возвращает строковое значение переменной окружения или значение по умолчанию
@@ -68,4 +70,27 @@ func MustGetString(key string) string {
 func IsSet(key string) bool {
 	_, exists := os.LookupEnv(key)
 	return exists
+}
+
+// LoadEnvFiles загружает переменные окружения из файлов в указанном порядке.
+// Каждый последующий файл переопределяет значения из предыдущих.
+// Отсутствие файлов не вызывает ошибку.
+// Функция не использует логгер чтобы избежать циклической зависимости,
+// так как логгер сам может зависеть от переменных окружения.
+func LoadEnvFiles() {
+	envFiles := []string{".env.paas", ".env.override"}
+
+	for i, filename := range envFiles {
+		var err error
+		if i == 0 {
+			// Первый файл загружаем обычным способом
+			err = godotenv.Load(filename)
+		} else {
+			// Последующие файлы загружаем с перезаписью
+			err = godotenv.Overload(filename)
+		}
+
+		// Молчаливо игнорируем ошибки - отсутствие файлов не критично
+		_ = err
+	}
 }

@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Gen-Do/skeleton-service/internal/pkg/env"
+	"github.com/Gen-Do/skeleton-service/internal/pkg/metrics"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -22,13 +25,13 @@ type Config struct {
 	IdleTimeout  time.Duration
 }
 
-// DefaultConfig возвращает конфигурацию сервера по умолчанию
-func DefaultConfig(port string) *Config {
+// defaultConfig возвращает конфигурацию сервера по умолчанию
+func defaultConfig() *Config {
 	return &Config{
-		Port:         port,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Port:         env.GetString("PORT", "8080"),
+		ReadTimeout:  time.Duration(env.GetInt("HTTP_READ_TIMEOUT", 15)) * time.Second,
+		WriteTimeout: time.Duration(env.GetInt("HTTP_WRITE_TIMEOUT", 15)) * time.Second,
+		IdleTimeout:  time.Duration(env.GetInt("HTTP_IDLE_TIMOUT", 60)) * time.Second,
 	}
 }
 
@@ -37,7 +40,7 @@ type Server struct {
 	config *Config
 	router *chi.Mux
 	server *http.Server
-	logger *logrus.Logger
+	logger logrus.FieldLogger
 }
 
 // RouteRegistrar интерфейс для регистрации маршрутов
@@ -45,8 +48,9 @@ type RouteRegistrar interface {
 	RegisterRoutes(router chi.Router)
 }
 
-// Setup создает и настраивает HTTP сервер
-func Setup(config *Config, logger *logrus.Logger) *Server {
+// New создает и настраивает HTTP сервер
+func New(metricsCollector *metrics.Metrics, logger logrus.FieldLogger) *Server {
+	config := defaultConfig()
 	router := chi.NewRouter()
 
 	server := &http.Server{
@@ -57,21 +61,20 @@ func Setup(config *Config, logger *logrus.Logger) *Server {
 		IdleTimeout:  config.IdleTimeout,
 	}
 
-	return &Server{
+	srv := &Server{
 		config: config,
 		router: router,
 		server: server,
 		logger: logger,
 	}
-}
 
-// SetupDefault создает сервер с конфигурацией по умолчанию
-func SetupDefault(port string, logger *logrus.Logger) *Server {
-	return Setup(DefaultConfig(port), logger)
+	srv.SetupMiddleware(true)
+
+	return srv
 }
 
 // SetupMiddleware настраивает стандартные middleware
-func (s *Server) SetupMiddleware(enableCORS bool, enableTracing bool) {
+func (s *Server) SetupMiddleware(enableCORS bool) {
 	// CORS middleware
 	if enableCORS {
 		s.router.Use(cors.Handler(cors.Options{
@@ -91,9 +94,7 @@ func (s *Server) SetupMiddleware(enableCORS bool, enableTracing bool) {
 	s.router.Use(middleware.Recoverer)
 
 	// OpenTelemetry middleware
-	if enableTracing {
-		s.router.Use(otelhttp.NewMiddleware("http-server"))
-	}
+	s.router.Use(otelhttp.NewMiddleware("http-server"))
 }
 
 // AddMiddleware добавляет кастомное middleware
