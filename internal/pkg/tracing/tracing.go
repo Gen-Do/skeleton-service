@@ -23,7 +23,7 @@ type Config struct {
 // defaultConfig возвращает конфигурацию трассировки по умолчанию
 func defaultConfig() *Config {
 	return &Config{
-		ServiceName:    env.GetString("SERVICE_NAME", "service-skeleton"),
+		ServiceName:    env.GetString("SERVICE_NAME", "skeleton"),
 		ServiceVersion: env.GetString("SERVICE_VERSION", "0"),
 		OTLPEndpoint:   env.GetString("TRACING_ENDPOINT", "http://localhost:4318/v1/traces"),
 		Enabled:        env.GetBool("TRACING_ENABLED", false),
