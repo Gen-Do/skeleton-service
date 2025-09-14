@@ -1,6 +1,7 @@
 service: skeleton
 owner: he110
 description: Skeleton for Go services in GenDO platform
+type: business
 env:
   LOG_LEVEL: info
 env.local:
@@ -25,4 +26,3 @@ dependencies:
   # Example of service dependency
   # - type: service
   #   name: auth
-    
