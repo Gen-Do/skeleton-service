@@ -1,14 +1,15 @@
 package metrics
 
 import (
+	"github.com/Gen-Do/skeleton-service/internal/pkg/env"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/sirupsen/logrus"
 )
 
 // Config содержит настройки для метрик
@@ -18,10 +19,10 @@ type Config struct {
 	Enabled     bool
 }
 
-// DefaultConfig возвращает конфигурацию метрик по умолчанию
-func DefaultConfig(serviceName string) *Config {
+// defaultConfig возвращает конфигурацию метрик по умолчанию
+func defaultConfig() *Config {
 	return &Config{
-		ServiceName: serviceName,
+		ServiceName: env.GetString("SERVICE_NAME", "skeleton"),
 		Namespace:   "service", // Можно настраивать через переменные окружения
 		Enabled:     true,
 	}
@@ -36,8 +37,9 @@ type Metrics struct {
 	httpInFlight      prometheus.Gauge
 }
 
-// Setup настраивает и возвращает Metrics
-func Setup(config *Config) *Metrics {
+// New настраивает и возвращает Metrics
+func New() *Metrics {
+	config := defaultConfig()
 	if !config.Enabled {
 		return &Metrics{config: config}
 	}
@@ -79,8 +81,8 @@ func Setup(config *Config) *Metrics {
 	registry.MustRegister(httpInFlight)
 
 	// Регистрируем стандартные метрики Go
-	registry.MustRegister(prometheus.NewGoCollector())
-	registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	registry.MustRegister(collectors.NewGoCollector())
+	registry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 
 	return &Metrics{
 		config:            config,
@@ -89,11 +91,6 @@ func Setup(config *Config) *Metrics {
 		httpDuration:      httpDuration,
 		httpInFlight:      httpInFlight,
 	}
-}
-
-// SetupDefault настраивает метрики с конфигурацией по умолчанию
-func SetupDefault(serviceName string) *Metrics {
-	return Setup(DefaultConfig(serviceName))
 }
 
 // RegisterCollector регистрирует дополнительный коллектор метрик
@@ -124,7 +121,7 @@ func (m *Metrics) Handler() http.Handler {
 }
 
 // Middleware возвращает middleware для сбора HTTP метрик
-func (m *Metrics) Middleware(logger *logrus.Logger) func(next http.Handler) http.Handler {
+func (m *Metrics) Middleware() func(next http.Handler) http.Handler {
 	if !m.config.Enabled {
 		// Возвращаем no-op middleware, если метрики отключены
 		return func(next http.Handler) http.Handler {
@@ -153,28 +150,8 @@ func (m *Metrics) Middleware(logger *logrus.Logger) func(next http.Handler) http
 
 			m.httpRequestsTotal.WithLabelValues(r.Method, endpoint, status).Inc()
 			m.httpDuration.WithLabelValues(r.Method, endpoint).Observe(duration)
-
-			// Логируем метрики, если нужно
-			if logger != nil {
-				logger.WithFields(logrus.Fields{
-					"method":      r.Method,
-					"endpoint":    endpoint,
-					"status":      status,
-					"duration_ms": duration * 1000,
-				}).Debug("HTTP request metrics recorded")
-			}
 		})
 	}
-}
-
-// RecordCustomMetric записывает кастомную метрику
-func (m *Metrics) RecordCustomMetric(name string, value float64, labels prometheus.Labels) {
-	if !m.config.Enabled {
-		return
-	}
-
-	// Это пример - в реальном приложении стоит создать кастомные метрики заранее
-	// Здесь показан принцип работы с дополнительными метриками
 }
 
 // GetRegistry возвращает Prometheus registry для регистрации дополнительных метрик

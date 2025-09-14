@@ -22,6 +22,8 @@ go.work
 .env
 .env.local
 .env.production
+.env.paas
+.env.override
 
 # IDE files
 .vscode/
