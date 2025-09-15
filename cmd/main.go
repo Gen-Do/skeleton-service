@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"os"
 
 	"github.com/Gen-Do/skeleton-service/internal/pkg/env"
 	"github.com/Gen-Do/skeleton-service/internal/pkg/logger"
@@ -19,11 +20,19 @@ import (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+const (
+	success = 0
+	fail    = 1
+)
+
+func run() int {
 	// Загрузка переменных окружения из файлов .env.paas и .env.override
 	env.LoadEnvFiles()
 
 	log := logger.New()
-
 	log.Info("Starting service")
 
 	// Настройка трассировки
@@ -46,6 +55,13 @@ func main() {
 	//     "Total number of custom operations",
 	//     []string{"operation_type", "status"},
 	// )
+
+	// Пример использования БД
+	//db, err := gorm.Open(postgres.Open(os.Getenv("DEP_DATABASE_DSN")), &gorm.Config{})
+	//if err != nil {
+	//	log.WithError(err).Fatal("Failed to connect to database")
+	//	return fail
+	//}
 
 	// Настройка HTTP сервера
 	httpServer := server.New(metricsCollector, log)
@@ -111,4 +127,6 @@ func main() {
 
 	// Graceful shutdown
 	shutdown.GracefulShutdown(httpServer, log)
+
+	return success
 }
