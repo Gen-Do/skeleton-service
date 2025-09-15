@@ -3,25 +3,19 @@ owner: he110
 description: Skeleton for Go services in GenDO platform
 type: business
 env:
-  LOG_LEVEL: info
+    LOG_LEVEL: info
 env.local:
-  LOG_LEVEL: debug
-# env.prod:
-#   Используй данную секцию для установки не чувствительных переменных окружения для продакшена
-#   LOG_LEVEL: warning
-# env.staging:
-#   Используй данную секцию для установки не чувствительных переменных окружения для стэйджа
-#   LOG_LEVEL: debug
+    LOG_LEVEL: debug
 dependencies:
   # Example of database dependency
-  # - type: database
-  #   name: postgres
-  #   version: 15
+#   - type: database
+#     name: postgres
+#     version: 15
 
   # Example of cache dependency
-  # - type: cache
-  #   name: redis
-  #   version: 7.0
+#   - type: cache
+#     name: redis
+#     version: 7.0
 
   # Example of service dependency
   # - type: service
