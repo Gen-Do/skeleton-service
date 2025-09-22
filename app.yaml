@@ -1,22 +1,46 @@
 service: skeleton
-owner: he110
+owner: gendo
+organization: gendo
 description: Skeleton for Go services in GenDO platform
 type: business
+port: 8080
+
 env:
-    LOG_LEVEL: info
-env.local:
-    LOG_LEVEL: debug
+  LOG_LEVEL: info
+  SERVICE_VERSION: "1.0.0"
+  METRICS_ENABLED: true
+  HEALTH_CHECK_ENABLED: true
+
+env.staging:
+  LOG_LEVEL: debug
+
+env.production:
+  LOG_LEVEL: warn
+
 dependencies:
-  # Example of database dependency
-#   - type: database
-#     name: postgres
-#     version: 15
+  # Примеры зависимостей - раскомментируйте и настройте под ваш сервис
+  
+  # База данных
+  # - type: database
+  #   name: postgres
+  #   version: 15
+  #   port: 5432
+  #   database: skeleton_db
 
-  # Example of cache dependency
-#   - type: cache
-#     name: redis
-#     version: 7.0
+  # Кэш
+  # - type: cache
+  #   name: redis
+  #   version: 7.0
+  #   port: 6379
 
-  # Example of service dependency
+  # Очередь сообщений
+  # - type: queue
+  #   name: rabbitmq
+  #   version: 3.12
+  #   port: 5672
+
+  # Другой сервис
   # - type: service
-  #   name: auth
+  #   name: auth-service
+  #   port: 8080
+  #   path: /api/v1

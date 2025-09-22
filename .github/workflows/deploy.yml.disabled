@@ -1,0 +1,249 @@
+# Универсальный GitHub Actions пайплайн для деплоя Go-сервисов через gendo-deployer
+# Этот файл будет переименован в deploy.yml при создании сервиса из скелетона
+
+name: Deploy Service
+
+on:
+  push:
+    branches:
+      - main      # Деплой в production
+      - staging   # Деплой в staging
+    tags:
+      - 'v*.*.*'  # Деплой тегов в production
+  
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  # Парсинг app.yaml для получения базовой информации
+  parse-config:
+    runs-on: ubuntu-latest
+    outputs:
+      service-name: ${{ steps.app-yaml.outputs.SERVICE_NAME }}
+      organization: ${{ steps.app-yaml.outputs.ORGANIZATION }}
+      target-env: ${{ steps.app-yaml.outputs.TARGET_ENV }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Parse app.yaml
+        id: app-yaml
+        run: |
+          # Извлекаем только необходимые переменные из app.yaml
+          SERVICE_NAME=$(yq eval '.service' app.yaml)
+          ORGANIZATION=$(yq eval '.organization // .owner' app.yaml)
+          
+          echo "SERVICE_NAME=${SERVICE_NAME}" >> $GITHUB_OUTPUT
+          echo "ORGANIZATION=${ORGANIZATION}" >> $GITHUB_OUTPUT
+          
+          # Определяем окружение
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TARGET_ENV="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            TARGET_ENV="production"
+          elif [ "${{ github.ref }}" = "refs/heads/staging" ]; then
+            TARGET_ENV="staging"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TARGET_ENV="production"
+          else
+            TARGET_ENV="staging"
+          fi
+          
+          echo "TARGET_ENV=${TARGET_ENV}" >> $GITHUB_OUTPUT
+          
+          # Выводим переменные для отладки
+          echo "Parsed configuration:"
+          echo "  SERVICE_NAME: ${SERVICE_NAME}"
+          echo "  ORGANIZATION: ${ORGANIZATION}"
+          echo "  TARGET_ENV: ${TARGET_ENV}"
+
+  # Тестирование Go приложения
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          cache: true
+          
+      - name: Download dependencies
+        run: go mod download
+        
+      - name: Run tests
+        run: |
+          echo "Running unit tests..."
+          go test -v ./...
+          
+          echo "Running race condition tests..."
+          go test -race ./...
+          
+      - name: Run linter
+        run: |
+          echo "Installing golangci-lint..."
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          
+          echo "Running linter..."
+          golangci-lint run --timeout=5m
+
+  # Сборка и публикация Docker образа
+  build-push:
+    needs: [parse-config, test]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Set image name and tag
+        id: image
+        run: |
+          # Формируем имя образа в нижнем регистре
+          IMAGE_NAME="ghcr.io/${{ github.repository }}"
+          IMAGE_NAME=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
+          IMAGE_TAG="${{ github.sha }}"
+          
+          echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.title=${{ needs.parse-config.outputs.service-name }}
+            org.opencontainers.image.description=GenDO service
+            org.opencontainers.image.vendor=${{ needs.parse-config.outputs.organization }}
+            
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Деплой в выбранное окружение
+  deploy:
+    needs: [parse-config, build-push]
+    runs-on: [self-hosted, TARGET_ORG_NAME, ${{ needs.parse-config.outputs.target-env }}]
+    environment: ${{ needs.parse-config.outputs.target-env }}
+    
+    env:
+      SERVICE_NAME: ${{ needs.parse-config.outputs.service-name }}
+      ORGANIZATION: ${{ needs.parse-config.outputs.organization }}
+      TARGET_ENV: ${{ needs.parse-config.outputs.target-env }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Prepare gendo-deployer
+        run: |
+          echo "Preparing gendo-deployer and checking dependencies..."
+          gendo-deployer prepare
+          
+      - name: Deploy service
+        run: |
+          # Формируем имя образа в нижнем регистре
+          IMAGE_NAME="ghcr.io/${{ github.repository }}"
+          IMAGE_NAME=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
+          IMAGE_TAG="${{ github.sha }}"
+          
+          echo "Deploying service ${{ env.SERVICE_NAME }} to ${{ env.TARGET_ENV }}"
+          echo "Image: ${IMAGE_NAME}:${IMAGE_TAG}"
+          
+          gendo-deployer deploy \
+            --org ${{ env.ORGANIZATION }} \
+            --env ${{ env.TARGET_ENV }} \
+            --service ${{ env.SERVICE_NAME }} \
+            --image ${IMAGE_NAME}:${IMAGE_TAG} \
+            --app-yaml ./app.yaml \
+            --verbose
+            
+      - name: Verify deployment
+        run: |
+          echo "Verifying deployment..."
+          
+          gendo-deployer status \
+            --org ${{ env.ORGANIZATION }} \
+            --env ${{ env.TARGET_ENV }} \
+            --service ${{ env.SERVICE_NAME }} \
+            --verbose
+
+  # Уведомления о результате деплоя
+  notify:
+    needs: [parse-config, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Determine deployment result
+        id: result
+        run: |
+          if [ "${{ needs.deploy.result }}" = "success" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "message=✅ Deployment successful" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "message=❌ Deployment failed" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Summary
+        run: |
+          # Формируем имя образа в нижнем регистре для summary
+          IMAGE_NAME="ghcr.io/${{ github.repository }}"
+          IMAGE_NAME=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
+          IMAGE_TAG="${{ github.sha }}"
+          
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Service**: ${{ needs.parse-config.outputs.service-name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Organization**: ${{ needs.parse-config.outputs.organization }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: ${{ needs.parse-config.outputs.target-env }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image**: ${IMAGE_NAME}:${IMAGE_TAG}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ steps.result.outputs.message }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
