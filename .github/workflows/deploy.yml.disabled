@@ -168,7 +168,7 @@ jobs:
   # Деплой в выбранное окружение
   deploy:
     needs: [parse-config, build-push]
-    runs-on: [self-hosted, TARGET_ORG_NAME, ${{ needs.parse-config.outputs.target-env }}]
+    runs-on: [self-hosted, TARGET_ORG_NAME]
     environment: ${{ needs.parse-config.outputs.target-env }}
     
     env:
