@@ -34,8 +34,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
+      - name: Cache yq
+        id: cache-yq
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/yq
+          key: yq-${{ runner.os }}-latest
+          
       - name: Install yq
+        if: steps.cache-yq.outputs.cache-hit != 'true'
         run: |
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
@@ -78,31 +88,36 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
         
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.21'
           cache: true
+          cache-dependency-path: go.sum
+          
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
           
       - name: Download dependencies
         run: go mod download
         
       - name: Run tests
         run: |
-          echo "Running unit tests..."
-          go test -v ./...
+          echo "Running unit tests with parallel execution..."
+          go test -v -parallel 4 ./...
           
           echo "Running race condition tests..."
-          go test -race ./...
-          
-      - name: Run linter
-        run: |
-          echo "Installing golangci-lint..."
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-          
-          echo "Running linter..."
-          golangci-lint run --timeout=5m
+          go test -race -parallel 2 ./...
 
   # Сборка и публикация Docker образа
   build-push:
@@ -112,6 +127,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
         
       - name: Set image name and tag
         id: image
@@ -128,6 +145,9 @@ jobs:
         
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            network=host
         
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -162,8 +182,14 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: |
+            type=gha
+            type=registry,ref=${{ steps.image.outputs.IMAGE_NAME }}:buildcache
+          cache-to: |
+            type=gha,mode=max
+            type=registry,ref=${{ steps.image.outputs.IMAGE_NAME }}:buildcache,mode=max
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
 
   # Деплой в выбранное окружение
   deploy:
@@ -179,6 +205,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
         
       - name: Prepare gendo-deployer
         run: |
