@@ -17,6 +17,12 @@ env.staging:
 env.production:
   LOG_LEVEL: warn
 
+secrets:
+  - SOME_SECRET_VAR # Пример того, как перечислять секреты для сервиса
+                    # Секреты должны быть записаны в Secrets в GitHub репозитории одним файлом/значением по ключу SECRETS
+
+# gateway: /my-awesome-service # Пример того, как можно сделать сервис доступным из вне
+
 dependencies:
   # Примеры зависимостей - раскомментируйте и настройте под ваш сервис
   
