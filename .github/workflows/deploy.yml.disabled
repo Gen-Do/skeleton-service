@@ -1,8 +1,8 @@
 # Универсальный GitHub Actions пайплайн для деплоя Go-сервисов через gendo-deployer
-# Версия v0.4.0+ с автоматическим извлечением org и service из app.yaml
-# Больше не требует передачи --org и --service флагов в gendo-deployer команды
+# Версия v0.5.0+ с поддержкой секретов из GitHub Secrets
+# Поддерживает изолированную передачу секретов через временные файлы
 
-name: Deploy Service
+name: Deploy Service with Secrets
 
 permissions:
   contents: read
@@ -36,6 +36,7 @@ jobs:
       organization: ${{ steps.app-yaml.outputs.ORGANIZATION }}
       target-env: ${{ steps.app-yaml.outputs.TARGET_ENV }}
       github-env: ${{ steps.app-yaml.outputs.GITHUB_ENV }}  # Для GitHub Environments
+      secrets-list: ${{ steps.app-yaml.outputs.SECRETS_LIST }}
     
     steps:
       - name: Checkout
@@ -90,12 +91,23 @@ jobs:
           echo "GITHUB_ENV=${GITHUB_ENV}" >> $GITHUB_OUTPUT
           echo "TARGET_ENV=${TARGET_ENV}" >> $GITHUB_OUTPUT
           
+          # Извлекаем список секретов из app.yaml (если есть)
+          if yq eval '.secrets' app.yaml >/dev/null 2>&1; then
+            SECRETS_LIST=$(yq eval '.secrets[]' app.yaml | tr '\n' ' ' | xargs)
+            echo "SECRETS_LIST=${SECRETS_LIST}" >> $GITHUB_OUTPUT
+            echo "Found secrets in app.yaml: ${SECRETS_LIST}"
+          else
+            echo "SECRETS_LIST=" >> $GITHUB_OUTPUT
+            echo "No secrets section found in app.yaml"
+          fi
+          
           # Выводим переменные для отладки
           echo "Parsed configuration:"
           echo "  SERVICE_NAME: ${SERVICE_NAME}"
           echo "  ORGANIZATION: ${ORGANIZATION}"
           echo "  GITHUB_ENV: ${GITHUB_ENV} (for GitHub Environments)"
           echo "  TARGET_ENV: ${TARGET_ENV} (for gendo-deployer)"
+          echo "  SECRETS_LIST: ${SECRETS_LIST}"
 
   # Тестирование Go приложения
   test:
@@ -110,7 +122,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.24.2'
+          go-version: '1.21'
           cache: true
           cache-dependency-path: go.sum
           
@@ -225,6 +237,7 @@ jobs:
       TARGET_ENV: ${{ needs.parse-config.outputs.target-env }}  # prod/staging для gendo-deployer
       IMAGE_NAME: ${{ needs.build-push.outputs.image-name }}
       IMAGE_TAG: ${{ needs.build-push.outputs.image-tag }}
+      SECRETS_LIST: ${{ needs.parse-config.outputs.secrets-list }}
     
     steps:
       - name: Checkout
@@ -260,6 +273,74 @@ jobs:
             # Не завершаем с ошибкой, просто предупреждаем
           fi
           
+      - name: Prepare secrets file
+        id: secrets
+        run: |
+          if [ -n "${{ env.SECRETS_LIST }}" ]; then
+            echo "Preparing secrets for deployment..."
+            
+            # Создаем временную директорию с уникальным именем для изоляции
+            SECRETS_DIR=$(mktemp -d -t gendo-secrets-XXXXXX)
+            SECRETS_FILE="${SECRETS_DIR}/secrets.env"
+            
+            echo "SECRETS_FILE=${SECRETS_FILE}" >> $GITHUB_OUTPUT
+            echo "SECRETS_DIR=${SECRETS_DIR}" >> $GITHUB_OUTPUT
+            
+            # Записываем секреты в изолированный файл
+            touch "${SECRETS_FILE}"
+            chmod 600 "${SECRETS_FILE}"
+            
+            # Обрабатываем каждый секрет из списка
+            for secret_name in ${{ env.SECRETS_LIST }}; do
+              echo "Processing secret: ${secret_name}"
+              
+              # Получаем значение секрета из GitHub Secrets
+              case "${secret_name}" in
+                "GITHUB_TOKEN")
+                  secret_value="${{ secrets.GITHUB_TOKEN }}"
+                  ;;
+                "DATABASE_PASSWORD")
+                  secret_value="${{ secrets.DATABASE_PASSWORD }}"
+                  ;;
+                "JWT_SECRET")
+                  secret_value="${{ secrets.JWT_SECRET }}"
+                  ;;
+                "API_KEY")
+                  secret_value="${{ secrets.API_KEY }}"
+                  ;;
+                "WEBHOOK_SECRET")
+                  secret_value="${{ secrets.WEBHOOK_SECRET }}"
+                  ;;
+                "REDIS_PASSWORD")
+                  secret_value="${{ secrets.REDIS_PASSWORD }}"
+                  ;;
+                "SMTP_PASSWORD")
+                  secret_value="${{ secrets.SMTP_PASSWORD }}"
+                  ;;
+                *)
+                  # Попытка получить секрет по имени (GitHub Actions не поддерживает динамические имена)
+                  echo "⚠️  Unknown secret: ${secret_name}. Add it to the case statement above."
+                  secret_value=""
+                  ;;
+              esac
+              
+              if [ -n "${secret_value}" ]; then
+                echo "${secret_name}=${secret_value}" >> "${SECRETS_FILE}"
+                echo "✅ Secret ${secret_name} added to secrets file"
+              else
+                echo "❌ Secret ${secret_name} is empty or not found in GitHub Secrets"
+                # Не завершаем с ошибкой, позволяем gendo-deployer обработать отсутствующие секреты
+              fi
+            done
+            
+            echo "Secrets file prepared: ${SECRETS_FILE}"
+            echo "File permissions: $(stat -c '%a' "${SECRETS_FILE}")"
+          else
+            echo "No secrets required for this service"
+            echo "SECRETS_FILE=" >> $GITHUB_OUTPUT
+            echo "SECRETS_DIR=" >> $GITHUB_OUTPUT
+          fi
+
       - name: Deploy service
         run: |
           FULL_IMAGE="${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
@@ -268,6 +349,14 @@ jobs:
           echo "Organization: ${{ env.ORGANIZATION }}"
           echo "Image: ${FULL_IMAGE}"
           echo "App YAML: ./app.yaml"
+          
+          if [ -n "${{ steps.secrets.outputs.SECRETS_FILE }}" ]; then
+            echo "Using secrets file: ${{ steps.secrets.outputs.SECRETS_FILE }}"
+            SECRETS_ARG="--secrets-file ${{ steps.secrets.outputs.SECRETS_FILE }}"
+          else
+            echo "No secrets file provided"
+            SECRETS_ARG=""
+          fi
           
           # ✅ УПРОЩЕНО: org и service теперь извлекаются автоматически из app.yaml
           echo "Running gendo-deployer deploy command..."
@@ -280,6 +369,7 @@ jobs:
             --env "${{ env.TARGET_ENV }}" \
             --image "${FULL_IMAGE}" \
             --app-yaml "./app.yaml" \
+            ${SECRETS_ARG} \
             --verbose
           
           DEPLOY_EXIT_CODE=$?
@@ -322,6 +412,23 @@ jobs:
             
           echo "Deployment verification completed"
 
+      - name: Cleanup secrets
+        if: always()
+        run: |
+          # Удаляем временные файлы с секретами для безопасности
+          if [ -n "${{ steps.secrets.outputs.SECRETS_FILE }}" ] && [ -f "${{ steps.secrets.outputs.SECRETS_FILE }}" ]; then
+            echo "Cleaning up secrets file: ${{ steps.secrets.outputs.SECRETS_FILE }}"
+            rm -f "${{ steps.secrets.outputs.SECRETS_FILE }}"
+            
+            if [ -n "${{ steps.secrets.outputs.SECRETS_DIR }}" ] && [ -d "${{ steps.secrets.outputs.SECRETS_DIR }}" ]; then
+              rmdir "${{ steps.secrets.outputs.SECRETS_DIR }}" 2>/dev/null || true
+            fi
+            
+            echo "✅ Secrets cleanup completed"
+          else
+            echo "No secrets file to cleanup"
+          fi
+
   # Уведомления о результате деплоя
   notify:
     needs: [parse-config, build-push, deploy]
@@ -354,3 +461,9 @@ jobs:
           echo "- **Status**: ${{ steps.result.outputs.message }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered by**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -n "${{ needs.parse-config.outputs.secrets-list }}" ]; then
+            echo "- **Secrets**: ${{ needs.parse-config.outputs.secrets-list }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Secrets**: None" >> $GITHUB_STEP_SUMMARY
+          fi
