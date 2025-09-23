@@ -87,14 +87,17 @@ func (s *Server) SetupMiddleware(enableCORS bool) {
 		}))
 	}
 
-	// Базовые middleware
-	s.router.Use(middleware.RequestID)
-	s.router.Use(middleware.RealIP)
-	s.router.Use(s.loggingMiddleware())
-	s.router.Use(middleware.Recoverer)
+    // Базовые middleware
+    s.router.Use(middleware.RequestID)
+    s.router.Use(middleware.RealIP)
 
-	// OpenTelemetry middleware
-	s.router.Use(otelhttp.NewMiddleware("http-server"))
+    // OpenTelemetry middleware должно идти до логирования,
+    // чтобы в контексте уже был установлен trace/span для логов
+    s.router.Use(otelhttp.NewMiddleware("http-server"))
+
+    // Логирование запросов и обработка паник
+    s.router.Use(s.loggingMiddleware())
+    s.router.Use(middleware.Recoverer)
 }
 
 // AddMiddleware добавляет кастомное middleware
