@@ -1,8 +1,9 @@
 # Универсальный GitHub Actions пайплайн для деплоя Go-сервисов через gendo-deployer
-# Версия v0.5.0+ с поддержкой секретов из GitHub Secrets
+# Версия v0.6.0+ с динамической поддержкой секретов через SECRETS
 # Поддерживает изолированную передачу секретов через временные файлы
+# Секреты извлекаются из централизованного секрета SECRETS в формате KEY=VALUE
 
-name: Deploy Service with Secrets
+name: Deploy Service with Dynamic Secrets
 
 permissions:
   contents: read
@@ -290,48 +291,59 @@ jobs:
             touch "${SECRETS_FILE}"
             chmod 600 "${SECRETS_FILE}"
             
-            # Обрабатываем каждый секрет из списка
-            for secret_name in ${{ env.SECRETS_LIST }}; do
-              echo "Processing secret: ${secret_name}"
+            # Проверяем наличие централизованного секрета SECRETS
+            if [ -n "${{ secrets.SECRETS }}" ]; then
+              echo "Found SECRETS in GitHub Secrets, parsing..."
               
-              # Получаем значение секрета из GitHub Secrets
-              case "${secret_name}" in
-                "GITHUB_TOKEN")
-                  secret_value="${{ secrets.GITHUB_TOKEN }}"
-                  ;;
-                "DATABASE_PASSWORD")
-                  secret_value="${{ secrets.DATABASE_PASSWORD }}"
-                  ;;
-                "JWT_SECRET")
-                  secret_value="${{ secrets.JWT_SECRET }}"
-                  ;;
-                "API_KEY")
-                  secret_value="${{ secrets.API_KEY }}"
-                  ;;
-                "WEBHOOK_SECRET")
-                  secret_value="${{ secrets.WEBHOOK_SECRET }}"
-                  ;;
-                "REDIS_PASSWORD")
-                  secret_value="${{ secrets.REDIS_PASSWORD }}"
-                  ;;
-                "SMTP_PASSWORD")
-                  secret_value="${{ secrets.SMTP_PASSWORD }}"
-                  ;;
-                *)
-                  # Попытка получить секрет по имени (GitHub Actions не поддерживает динамические имена)
-                  echo "⚠️  Unknown secret: ${secret_name}. Add it to the case statement above."
-                  secret_value=""
-                  ;;
-              esac
+              # Создаем временный файл для парсинга SECRETS
+              TEMP_SECRETS=$(mktemp)
+              echo '${{ secrets.SECRETS }}' > "${TEMP_SECRETS}"
               
-              if [ -n "${secret_value}" ]; then
-                echo "${secret_name}=${secret_value}" >> "${SECRETS_FILE}"
-                echo "✅ Secret ${secret_name} added to secrets file"
-              else
-                echo "❌ Secret ${secret_name} is empty or not found in GitHub Secrets"
-                # Не завершаем с ошибкой, позволяем gendo-deployer обработать отсутствующие секреты
+              # Создаем ассоциативный массив для хранения доступных секретов
+              declare -A available_secrets
+              
+              # Парсим SECRETS построчно в формате KEY=VALUE
+              while IFS='=' read -r key value || [ -n "$key" ]; do
+                # Пропускаем пустые строки и строки без знака =
+                if [ -n "$key" ] && [ -n "$value" ]; then
+                  # Удаляем возможные пробелы в начале и конце
+                  key=$(echo "$key" | xargs)
+                  value=$(echo "$value" | xargs)
+                  available_secrets["$key"]="$value"
+                  echo "Loaded secret: $key"
+                fi
+              done < "${TEMP_SECRETS}"
+              
+              # Удаляем временный файл
+              rm -f "${TEMP_SECRETS}"
+              
+              # Обрабатываем каждый секрет из списка app.yaml
+              for secret_name in ${{ env.SECRETS_LIST }}; do
+                echo "Processing secret: ${secret_name}"
+                
+                # Проверяем наличие секрета в available_secrets
+                if [[ -v "available_secrets[$secret_name]" ]] && [ -n "${available_secrets[$secret_name]}" ]; then
+                  echo "${secret_name}=${available_secrets[$secret_name]}" >> "${SECRETS_FILE}"
+                  echo "✅ Secret ${secret_name} added to secrets file"
+                else
+                  echo "⚠️  Secret ${secret_name} not found in SECRETS or is empty"
+                  # Не завершаем с ошибкой, позволяем gendo-deployer обработать отсутствующие секреты
+                fi
+              done
+              
+            else
+              echo "SECRETS not provided in GitHub Secrets"
+              echo "Skipping secrets processing (this is normal for services without secrets)"
+              
+              # Для обратной совместимости: если нет SECRETS, но есть список секретов,
+              # предупреждаем пользователя
+              if [ -n "${{ env.SECRETS_LIST }}" ]; then
+                echo "⚠️  Service requires secrets: ${{ env.SECRETS_LIST }}"
+                echo "⚠️  Please add SECRETS to GitHub repository secrets with format:"
+                echo "⚠️  SECRET_NAME_1=value1"
+                echo "⚠️  SECRET_NAME_2=value2"
               fi
-            done
+            fi
             
             echo "Secrets file prepared: ${SECRETS_FILE}"
             echo "File permissions: $(stat -c '%a' "${SECRETS_FILE}")"
