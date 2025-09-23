@@ -39,46 +39,42 @@ type TracerProvider struct {
 
 // New настраивает и возвращает TracerProvider
 func New() (*TracerProvider, error) {
-	config := defaultConfig()
-	if !config.Enabled {
-		// Возвращаем no-op tracer provider
-		tp := trace.NewTracerProvider()
-		return &TracerProvider{
-			TracerProvider: tp,
-			config:         config,
-		}, nil
-	}
+    config := defaultConfig()
 
-	// Создание OTLP HTTP экспортера
-	exporter, err := otlptracehttp.New(context.Background(),
-		otlptracehttp.WithEndpoint(config.OTLPEndpoint),
-		otlptracehttp.WithInsecure(), // для локальной разработки
-	)
-	if err != nil {
-		return nil, err
-	}
+    // Ресурс с информацией о сервисе
+    res := resource.NewWithAttributes(
+        semconv.SchemaURL,
+        semconv.ServiceName(config.ServiceName),
+        semconv.ServiceVersion(config.ServiceVersion),
+    )
 
-	// Создание ресурса с информацией о сервисе
-	res := resource.NewWithAttributes(
-		semconv.SchemaURL,
-		semconv.ServiceName(config.ServiceName),
-		semconv.ServiceVersion(config.ServiceVersion),
-	)
+    // Опции провайдера трассировки (самплинг применяется всегда)
+    opts := []trace.TracerProviderOption{
+        trace.WithResource(res),
+        trace.WithSampler(trace.TraceIDRatioBased(config.SamplingRate)),
+    }
 
-	// Создание tracer provider с настройками
-	tp := trace.NewTracerProvider(
-		trace.WithBatcher(exporter),
-		trace.WithResource(res),
-		trace.WithSampler(trace.TraceIDRatioBased(config.SamplingRate)),
-	)
+    // Экспортер добавляем только если включена трассировка
+    if config.Enabled {
+        exporter, err := otlptracehttp.New(context.Background(),
+            otlptracehttp.WithEndpoint(config.OTLPEndpoint),
+            otlptracehttp.WithInsecure(), // для локальной разработки
+        )
+        if err != nil {
+            return nil, err
+        }
+        opts = append(opts, trace.WithBatcher(exporter))
+    }
 
-	// Установка глобального tracer provider
-	otel.SetTracerProvider(tp)
+    // Создаем и устанавливаем глобальный tracer provider всегда,
+    // чтобы контекст со span/trace-id был доступен даже без экспорта
+    tp := trace.NewTracerProvider(opts...)
+    otel.SetTracerProvider(tp)
 
-	return &TracerProvider{
-		TracerProvider: tp,
-		config:         config,
-	}, nil
+    return &TracerProvider{
+        TracerProvider: tp,
+        config:         config,
+    }, nil
 }
 
 // Shutdown корректно завершает работу tracer provider
