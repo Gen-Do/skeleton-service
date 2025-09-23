@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	observability "github.com/Gen-Do/lib-observability"
 	"github.com/Gen-Do/lib-observability/env"
@@ -53,17 +54,40 @@ func run() int {
 	})
 
 	port := env.Get("PORT", 8080)
-	ctx = log.WithField(ctx, "port", port)
-	log.Info(ctx, "Server starting")
-	http.ListenAndServe(fmt.Sprintf(":%d", port), r)
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%d", port),
+		Handler: r,
+	}
 
-	<-ctx.Done()
-	if !errors.Is(ctx.Err(), context.Canceled) {
-		log.Error(log.WithError(ctx, ctx.Err()), "Application stopped with error")
+	// Запускаем сервер в отдельной горутине
+	serverErr := make(chan error, 1)
+	go func() {
+		ctx = log.WithField(ctx, "port", port)
+		log.Info(ctx, "Server starting")
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+		}
+	}()
+
+	// Ждём сигнал завершения или ошибку сервера
+	select {
+	case err := <-serverErr:
+		log.Error(log.WithError(ctx, err), "Server failed to start")
+		return fail
+	case <-ctx.Done():
+		log.Info(ctx, "Shutdown signal received")
+	}
+
+	// Graceful shutdown
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Error(log.WithError(ctx, err), "Server shutdown failed")
 		return fail
 	}
 
-	log.Info(ctx, "Service stopped")
+	log.Info(ctx, "Service stopped gracefully")
 
 	return success
 }
