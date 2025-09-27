@@ -2,16 +2,14 @@ package main
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	observability "github.com/Gen-Do/lib-observability"
-	"github.com/Gen-Do/lib-observability/env"
+	platform "github.com/Gen-Do/lib-platform"
+	"github.com/Gen-Do/lib-transport/listener"
+	"github.com/Gen-Do/skeleton-service/internal/workers/example"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
 )
@@ -20,14 +18,8 @@ func main() {
 	os.Exit(run())
 }
 
-const (
-	success = 0
-	fail    = 1
-)
-
 func run() int {
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
+	ctx := context.Background()
 
 	obs := observability.MustNew(ctx)
 	defer obs.Shutdown(ctx)
@@ -44,7 +36,6 @@ func run() int {
 
 	// Настройка HTTP сервера
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID)
 	obs.SetupHTTP(r)
 
 	// Ваши обработчики
@@ -53,41 +44,31 @@ func run() int {
 		w.Write([]byte("Hello World!"))
 	})
 
-	port := env.Get("PORT", 8080)
-	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
-		Handler: r,
-	}
+	lis := listener.New(
+		listener.WithIdleTimeout(10*time.Second),
+		listener.WithReadTimeout(10*time.Second),
+		listener.WithWriteTimeout(10*time.Second),
+		listener.WithMW(middleware.RequestID),
+		listener.WithLogger(log),
+	)
 
-	// Запускаем сервер в отдельной горутине
-	serverErr := make(chan error, 1)
-	go func() {
-		ctx = log.WithField(ctx, "port", port)
-		log.Info(ctx, "Server starting")
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			serverErr <- err
-		}
-	}()
-
-	// Ждём сигнал завершения или ошибку сервера
-	select {
-	case err := <-serverErr:
-		log.Error(log.WithError(ctx, err), "Server failed to start")
-		return fail
-	case <-ctx.Done():
-		log.Info(ctx, "Shutdown signal received")
-	}
-
-	// Graceful shutdown
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer shutdownCancel()
-
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Error(log.WithError(ctx, err), "Server shutdown failed")
-		return fail
+	err := platform.Run(ctx,
+		platform.WithListener(lis),
+		platform.WithMux(r),
+		platform.WithLogger(log),
+		platform.WithEnableSignalHandling(true),
+		platform.WithObservability(platform.ObservabilitySettings{
+			Logger:  log,
+			Metrics: nil,
+		}),
+		platform.WithWorkers(example.NewWorker(log)),
+	)
+	if err != nil {
+		log.Error(log.WithError(ctx, err), "Application exited with error")
+		return platform.ExitCodeFailure
 	}
 
 	log.Info(ctx, "Service stopped gracefully")
 
-	return success
+	return platform.ExitCodeSuccess
 }

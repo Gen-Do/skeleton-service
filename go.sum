@@ -1,5 +1,9 @@
 github.com/Gen-Do/lib-observability v1.0.1 h1:+BvV9BuBJLDcfPFgp/FNr2nx+t6lLs0RbOn7RwnKzk8=
 github.com/Gen-Do/lib-observability v1.0.1/go.mod h1:i62HJXRGGnV8c2w76q+mPYAB0lgpT98m233+fTT0h+g=
+github.com/Gen-Do/lib-platform v1.0.1 h1:HvF9eA+OZZUoOHBGCAYfY9lP90lk6+5kvocZ3sUKA38=
+github.com/Gen-Do/lib-platform v1.0.1/go.mod h1:e6yAWewT6Vtq5LDCJpgtsk6biMIhWYN+9WejbByp9ZI=
+github.com/Gen-Do/lib-transport v1.0.0 h1:j+OEYQisP3EMcC/iKaNQk5fBpm1CWGm3dFD+H6DhISs=
+github.com/Gen-Do/lib-transport v1.0.0/go.mod h1:maZ6+PcIoZ6IbnCmGUujDxWrWhfgrY2EJljQRJQpx50=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/cenkalti/backoff/v5 v5.0.2 h1:rIfFVxEf1QsI7E1ZHfp/B4DF/6QBAUhmgkxc0H7Zss8=

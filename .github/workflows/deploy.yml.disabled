@@ -172,7 +172,7 @@ jobs:
           # Формируем тег в том же формате, что и metadata-action
           if [[ "${{ github.ref }}" == "refs/heads/"* ]]; then
             BRANCH_NAME="${{ github.ref_name }}"
-            IMAGE_TAG="${BRANCH_NAME}-$(echo "${{ github.sha }}" | cut -c1-7)"
+            IMAGE_TAG="${BRANCH_NAME}$(echo "${{ github.sha }}" | cut -c1-7)"
           else
             IMAGE_TAG="${{ github.sha }}"
           fi
