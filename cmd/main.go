@@ -2,16 +2,16 @@ package main
 
 import (
 	"context"
-	"net/http"
 	"os"
 	"time"
 
 	observability "github.com/Gen-Do/lib-observability"
 	platform "github.com/Gen-Do/lib-platform"
 	"github.com/Gen-Do/lib-transport/listener"
+	"github.com/Gen-Do/skeleton-service/internal/api/get_example"
+	"github.com/Gen-Do/skeleton-service/internal/generated/server/api"
 	"github.com/Gen-Do/skeleton-service/internal/workers/example"
 	"github.com/go-chi/chi/middleware"
-	"github.com/go-chi/chi/v5"
 )
 
 func main() {
@@ -35,26 +35,24 @@ func run() int {
 	//}
 
 	// Настройка HTTP сервера
-	r := chi.NewRouter()
-	obs.SetupHTTP(r)
+	srv := api.CreateHandler(
+		api.WithMW(middleware.RequestID),
+		api.WithMW(obs.HTTPMiddleware()),
+	)
+	obs.RegisterRoutes(srv.GetMux())
 
-	// Ваши обработчики
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		log.Info(r.Context(), "Hello World!")
-		w.Write([]byte("Hello World!"))
-	})
+	srv.SetGetExampleHandler(get_example.Handler)
 
 	lis := listener.New(
 		listener.WithIdleTimeout(10*time.Second),
 		listener.WithReadTimeout(10*time.Second),
 		listener.WithWriteTimeout(10*time.Second),
-		listener.WithMW(middleware.RequestID),
 		listener.WithLogger(log),
 	)
 
 	err := platform.Run(ctx,
 		platform.WithListener(lis),
-		platform.WithMux(r),
+		platform.WithMux(srv.GetMux()),
 		platform.WithLogger(log),
 		platform.WithEnableSignalHandling(true),
 		platform.WithObservability(platform.ObservabilitySettings{

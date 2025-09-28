@@ -6,9 +6,11 @@ require (
 	github.com/Gen-Do/lib-platform v1.0.1
 	github.com/Gen-Do/lib-transport v1.0.0
 	github.com/go-chi/chi/v5 v5.2.2
+	github.com/oapi-codegen/runtime v1.1.2
 )
 
 require (
+	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/prometheus/client_golang v1.23.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect

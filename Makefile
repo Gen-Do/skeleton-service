@@ -24,18 +24,33 @@ generate: ## Генерировать код из OpenAPI спецификаци
 
 generate-openapi: ## Генерировать код из OpenAPI спецификации
 	@echo "📋 Генерация из OpenAPI спецификации..."
-	@mkdir -p internal/generated/api internal/generated/client internal/api
+	@mkdir -p internal/generated/server/api internal/generated/clients internal/api internal/clients
+
+	@oapi-codegen -generate types      -package api -o internal/generated/server/api/types.go api/*.yaml
+	@oapi-codegen -generate chi-server -package api -o internal/generated/server/api/handlers.go api/schema.yaml
+	@oapi-codegen -generate chi-server -package api -o internal/generated/server/api/server.go -templates=api/templates api/schema.yaml
 	
-	# Генерация моделей (entities) в internal/generated/api/
-	@oapi-codegen -generate types -package api -o internal/generated/api/types.go api/openapi.yaml
-	
-	# Генерация интерфейса сервера (Echo) не нужна, используем Chi handlers
-	
-	# Генерация Chi handlers в internal/generated/api/
-	@oapi-codegen -generate chi-server -package api -o internal/generated/api/handlers.go api/openapi.yaml
-	
-	# Генерация клиента и типов клиента в отдельную директорию
-	@oapi-codegen -generate types,client -package client -o internal/generated/client/client.go api/openapi.yaml
+	@echo "🔧 Генерация клиентов..."
+	@if [ -d "api/clients" ]; then \
+		file_count=$$(find api/clients -name "*.yaml" -o -name "*.yml" 2>/dev/null | wc -l); \
+		if [ "$$file_count" -gt 0 ]; then \
+			for file in api/clients/*.yaml api/clients/*.yml; do \
+				if [ -f "$$file" ]; then \
+					filename=$$(basename "$$file" .yaml); \
+					filename=$$(basename "$$filename" .yml); \
+					package_name=$$(echo "$$filename" | tr '[:upper:]' '[:lower:]' | sed 's/[ -]/_/g'); \
+					echo "📦 Генерация клиента для $$file в пакет $$package_name..."; \
+					mkdir -p "internal/generated/clients/$$package_name"; \
+					oapi-codegen -generate types -package $$package_name -o "internal/generated/clients/$$package_name/types.go" "$$file"; \
+					oapi-codegen -generate client -package $$package_name -o "internal/generated/clients/$$package_name/client.go" "$$file"; \
+				fi; \
+			done; \
+		else \
+			echo "⚠️  Директория api/clients пуста, пропускаем генерацию клиентов"; \
+		fi; \
+	else \
+		echo "⚠️  Директория api/clients не найдена, пропускаем генерацию клиентов"; \
+	fi
 	
 	@echo "✅ Генерация из OpenAPI завершена"
 

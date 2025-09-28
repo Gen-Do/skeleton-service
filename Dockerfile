@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # Install git and ca-certificates (needed for go modules and HTTPS)
 RUN apk add --no-cache git ca-certificates
@@ -38,7 +38,7 @@ WORKDIR /app
 COPY --from=builder /app/main .
 
 # Copy .env file if exists (ignore if not found)
-COPY --from=builder /app/.env* ./ || true
+COPY --from=builder /app/.env* ./
 
 # Change ownership to non-root user
 RUN chown -R appuser:appgroup /app
