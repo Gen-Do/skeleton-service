@@ -24,7 +24,7 @@ generate: ## Генерировать код из OpenAPI спецификаци
 
 generate-openapi: ## Генерировать код из OpenAPI спецификации
 	@echo "📋 Генерация из OpenAPI спецификации..."
-	@mkdir -p internal/generated/server/api internal/generated/clients internal/api internal/clients
+	@mkdir -p internal/generated/server/api internal/generated/clients internal/api
 
 	@oapi-codegen -generate types      -package api -o internal/generated/server/api/types.go api/*.yaml
 	@oapi-codegen -generate chi-server -package api -o internal/generated/server/api/handlers.go api/schema.yaml
@@ -41,7 +41,7 @@ generate-openapi: ## Генерировать код из OpenAPI специфи
 					package_name=$$(echo "$$filename" | tr '[:upper:]' '[:lower:]' | sed 's/[ -]/_/g'); \
 					echo "📦 Генерация клиента для $$file в пакет $$package_name..."; \
 					mkdir -p "internal/generated/clients/$$package_name"; \
-					oapi-codegen -generate types -package $$package_name -o "internal/generated/clients/$$package_name/types.go" "$$file"; \
+					oapi-codegen -generate types  -package $$package_name -o "internal/generated/clients/$$package_name/types.go" "$$file"; \
 					oapi-codegen -generate client -package $$package_name -o "internal/generated/clients/$$package_name/client.go" "$$file"; \
 				fi; \
 			done; \

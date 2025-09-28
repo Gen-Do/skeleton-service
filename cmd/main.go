@@ -38,6 +38,7 @@ func run() int {
 	srv := api.CreateHandler(
 		api.WithMW(middleware.RequestID),
 		api.WithMW(obs.HTTPMiddleware()),
+		api.WithBaseURL("/v1"),
 	)
 	obs.RegisterRoutes(srv.GetMux())
 
